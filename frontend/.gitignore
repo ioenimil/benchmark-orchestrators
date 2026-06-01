@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Vite cache
+.vite/
+
+# Local env files
+.env.local
+.env.*.local
+
+# TypeScript incremental build info
+*.tsbuildinfo

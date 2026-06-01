@@ -1,0 +1,23 @@
+# Virtual environment
+.venv/
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# uv
+.python-version
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checkers
+.mypy_cache/
+.ruff_cache/
+
+# Distribution
+dist/
+*.egg-info/
