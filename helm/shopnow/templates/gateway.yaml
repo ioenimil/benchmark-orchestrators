@@ -1,0 +1,32 @@
+# LoadBalancerConfiguration tells the AWS LB Controller how to build the ALB
+# for this Gateway: internet-facing (default would be "internal"). Target type
+# defaults to "ip" for Gateway API, so pods are reached directly.
+# Verify field names against the LBC 2.14 Gateway docs:
+#   https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/gateway/gateway/
+apiVersion: gateway.k8s.aws/v1beta1
+kind: LoadBalancerConfiguration
+metadata:
+  name: shopnow-lb-config
+  namespace: {{ .Release.Namespace }}
+spec:
+  scheme: {{ .Values.gateway.scheme }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: shopnow-gateway
+  namespace: {{ .Release.Namespace }}
+spec:
+  gatewayClassName: {{ .Values.gateway.className }}
+  infrastructure:
+    parametersRef:
+      group: gateway.k8s.aws
+      kind: LoadBalancerConfiguration
+      name: shopnow-lb-config
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same

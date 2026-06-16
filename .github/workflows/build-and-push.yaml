@@ -1,0 +1,109 @@
+name: build-and-push
+
+# Reusable workflow: builds a single service image and (optionally) pushes it
+# to Amazon ECR. Authentication uses GitHub OIDC -> an IAM role, so no
+# long-lived AWS keys are stored in the repo. Called from ci-cd.yaml once per
+# service.
+#
+# AWS/ECR steps only run when `push` is true. The IAM trust policy (see
+# infra/modules/github-oidc) is scoped to the `main` branch, so PR runs
+# couldn't assume the role anyway — PRs get a build-only validation instead.
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Logical service name, used for cache scoping and logs."
+        required: true
+        type: string
+      context:
+        description: "Docker build context / path to the service directory."
+        required: true
+        type: string
+      dockerfile:
+        description: "Dockerfile path, relative to the build context."
+        required: false
+        type: string
+        default: Dockerfile
+      ecr_repository:
+        description: "Target ECR repository name (must already exist)."
+        required: true
+        type: string
+      aws_region:
+        description: "AWS region hosting the ECR registry."
+        required: true
+        type: string
+      push:
+        description: "Push the image to ECR. False on PRs (build-only validation)."
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      AWS_ROLE_ARN:
+        description: "ARN of the IAM role to assume via OIDC."
+        required: true
+
+permissions:
+  id-token: write   # required to request the OIDC token
+  contents: read
+
+jobs:
+  build-and-push:
+    name: ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --- PR path: build only, to validate the Dockerfile. No AWS access. ---
+      - name: Build (validation only)
+        if: ${{ !inputs.push }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.context }}/${{ inputs.dockerfile }}
+          push: false
+          cache-from: type=gha,scope=${{ inputs.service }}
+          cache-to: type=gha,scope=${{ inputs.service }},mode=max
+          provenance: false
+
+      # --- main / workflow_dispatch path: authenticate, tag, build and push. ---
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ inputs.push }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        if: ${{ inputs.push }}
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Derive image tags
+        id: meta
+        if: ${{ inputs.push }}
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/${{ inputs.ecr_repository }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        if: ${{ inputs.push }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.context }}/${{ inputs.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # GitHub Actions layer cache keeps rebuilds fast, scoped per service.
+          cache-from: type=gha,scope=${{ inputs.service }}
+          cache-to: type=gha,scope=${{ inputs.service }},mode=max
+          provenance: false

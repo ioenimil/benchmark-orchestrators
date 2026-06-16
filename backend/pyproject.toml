@@ -10,3 +10,13 @@ dependencies = [
     "redis==5.2.0",
     "pydantic-settings==2.6.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.28",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

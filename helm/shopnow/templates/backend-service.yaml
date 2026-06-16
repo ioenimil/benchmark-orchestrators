@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    # Port 8000 matches BACKEND_PORT in the ConfigMap; the frontend nginx
+    # proxies to http://backend:8000/ (its template includes :${BACKEND_PORT}).
+    - name: http
+      port: 8000
+      targetPort: 8000

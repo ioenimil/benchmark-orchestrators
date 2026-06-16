@@ -1,0 +1,27 @@
+# Copy to terraform.tfvars and adjust. All values shown are the defaults.
+
+project     = "shopnow"
+region      = "eu-west-1"
+aws_profile = "nsp-sandbox" # set to "" to use the default AWS credential chain
+environment = "benchmark"
+
+# Networking
+vpc_cidr = "10.0.0.0/16"
+az_count = 2
+
+# Database (shared by ECS + EKS)
+db_name           = "orchestrator"
+db_username       = "shopnow"
+db_instance_class = "db.t4g.micro"
+db_engine_version = "16.4"
+
+# Images — pass a real tag (e.g. a git SHA) from scripts/build-push.sh.
+# Never deploy :latest to a real environment.
+image_tag      = "latest"
+ecr_repo_names = ["shopnow-frontend", "shopnow-backend"]
+
+# EKS
+k8s_version         = "1.33"
+node_instance_type  = "t3.medium"
+lbc_chart_version   = "1.14.0"
+gateway_api_version = "v1.5.0"

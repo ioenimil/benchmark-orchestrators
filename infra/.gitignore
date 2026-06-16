@@ -1,0 +1,14 @@
+# Terraform state, plans, providers, and resolved backend/var files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfplan
+
+# Resolved backend config (contains the account-scoped bucket name)
+backend.hcl
+
+# Real variable values / secrets
+terraform.tfvars
+*.auto.tfvars

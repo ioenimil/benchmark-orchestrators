@@ -1,0 +1,8 @@
+# Copy to backend.hcl (or let scripts/bootstrap.sh generate it) and run:
+#   terraform init -backend-config=backend.hcl
+#
+# Values come from the bootstrap project's outputs:
+#   terraform -chdir=bootstrap output -raw state_bucket_name
+#   terraform -chdir=bootstrap output -raw aws_region
+bucket = "shopnow-tfstate-<account_id>-eu-west-1"
+region = "eu-west-1"

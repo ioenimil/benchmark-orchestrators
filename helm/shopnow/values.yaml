@@ -1,0 +1,39 @@
+# Namespace is set via `helm install --namespace shopnow --create-namespace`,
+# not here, so the chart can be installed under any release namespace.
+
+image:
+  backend:
+    repository: "" # ECR repo URL, e.g. <account>.dkr.ecr.<region>.amazonaws.com/shopnow-backend
+    tag: latest
+  frontend:
+    repository: "" # ECR repo URL, e.g. <account>.dkr.ecr.<region>.amazonaws.com/shopnow-frontend
+    tag: latest
+
+backend:
+  replicas: 2
+
+frontend:
+  replicas: 2
+
+redis:
+  replicas: 1
+  image: redis:7-alpine
+
+# CoreDNS resolves these to the in-cluster ClusterIP Services.
+config:
+  backendHost: backend
+  backendPort: "8000"
+  redisHost: redis
+  redisPort: "6379"
+
+database:
+  host: ""     # RDS endpoint — set via pipeline from terraform output db_secret_arn
+  port: "5432"
+  name: ""     # e.g. orchestrator
+  user: ""     # e.g. shopnow
+  password: "" # injected from Secrets Manager by the pipeline; never committed
+
+gateway:
+  className: shopnow-alb
+  # internet-facing (default would be "internal").
+  scheme: internet-facing

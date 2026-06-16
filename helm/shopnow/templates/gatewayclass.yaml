@@ -1,0 +1,7 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ .Values.gateway.className }}
+spec:
+  # The AWS Load Balancer Controller reconciles this class into an ALB.
+  controllerName: gateway.k8s.aws/alb

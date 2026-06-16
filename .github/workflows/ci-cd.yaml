@@ -1,0 +1,215 @@
+name: CI
+
+# Pipeline: run tests -> build images -> push to ECR -> deploy to ECS + EKS.
+#
+# Images are only pushed (and deployed) on pushes to the default branch
+# and manual runs. Pull requests run tests and build-only validation.
+# ECS and EKS deployments run in parallel after images are pushed.
+#
+# Required configuration (Settings -> Secrets and variables -> Actions):
+#   secret  AWS_ROLE_ARN      ARN of the IAM role trusted by GitHub OIDC.
+#   var     AWS_REGION        ECR/ECS/EKS region (optional, defaults to eu-west-1).
+#   var     ECS_CLUSTER_NAME  ECS cluster name — from: terraform output ecs_cluster_name
+#   var     EKS_CLUSTER_NAME  EKS cluster name — from: terraform output eks_cluster_name
+#   var     DB_SECRET_ARN     RDS Secrets Manager ARN — from: terraform output db_secret_arn
+#
+# ECR repositories (created by infra/ Terraform): shopnow-backend, shopnow-frontend.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write   # propagated to the reusable build workflow for OIDC
+  contents: read
+
+jobs:
+  test-backend:
+    name: Test backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # SQLite keeps import-time engine creation happy without a real DB;
+      # the smoke tests never touch it.
+      DATABASE_URL: sqlite://
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Run tests
+        run: uv run --group dev pytest -q
+
+  test-frontend:
+    name: Test frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  build-backend:
+    name: Build backend image
+    needs: [test-backend, test-frontend]
+    uses: ./.github/workflows/build-and-push.yaml
+    with:
+      service: backend
+      context: backend
+      ecr_repository: shopnow-backend
+      aws_region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+  build-frontend:
+    name: Build frontend image
+    needs: [test-backend, test-frontend]
+    uses: ./.github/workflows/build-and-push.yaml
+    with:
+      service: frontend
+      context: frontend
+      ecr_repository: shopnow-frontend
+      aws_region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+  deploy-ecs:
+    name: Deploy to ECS
+    needs: [build-backend, build-frontend]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+      - name: Force new deployment (frontend)
+        run: |
+          aws ecs update-service \
+            --cluster "${{ vars.ECS_CLUSTER_NAME }}" \
+            --service frontend \
+            --force-new-deployment \
+            --no-cli-pager
+
+      - name: Force new deployment (backend)
+        run: |
+          aws ecs update-service \
+            --cluster "${{ vars.ECS_CLUSTER_NAME }}" \
+            --service backend \
+            --force-new-deployment \
+            --no-cli-pager
+
+      - name: Wait for services to stabilise
+        run: |
+          aws ecs wait services-stable \
+            --cluster "${{ vars.ECS_CLUSTER_NAME }}" \
+            --services frontend backend
+
+  deploy-eks:
+    name: Deploy to EKS
+    needs: [build-backend, build-frontend]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.16.0"
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ vars.EKS_CLUSTER_NAME }}" \
+            --region "${{ vars.AWS_REGION || 'eu-west-1' }}"
+
+      - name: Fetch DB credentials from Secrets Manager
+        id: db
+        run: |
+          SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id "${{ vars.DB_SECRET_ARN }}" \
+            --query SecretString --output text)
+          DB_PASSWORD=$(echo "$SECRET" | jq -r .password)
+          echo "::add-mask::$DB_PASSWORD"
+          {
+            echo "host=$(echo "$SECRET" | jq -r .host)"
+            echo "port=$(echo "$SECRET" | jq -r .port)"
+            echo "name=$(echo "$SECRET" | jq -r .dbname)"
+            echo "user=$(echo "$SECRET" | jq -r .username)"
+            echo "password=$DB_PASSWORD"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Deploy via Helm
+        env:
+          DB_PASSWORD: ${{ steps.db.outputs.password }}
+        run: |
+          IMAGE_TAG="sha-${{ github.sha }}"
+          REGISTRY="${{ steps.ecr.outputs.registry }}"
+
+          # Write the password to a temp values file to keep it off the command line.
+          VALS=$(mktemp)
+          printf 'database:\n  password: "%s"\n' "$DB_PASSWORD" > "$VALS"
+          trap 'rm -f "$VALS"' EXIT
+
+          helm upgrade --install shopnow ./helm/shopnow \
+            --namespace shopnow --create-namespace \
+            --set "image.backend.repository=${REGISTRY}/shopnow-backend" \
+            --set "image.backend.tag=${IMAGE_TAG}" \
+            --set "image.frontend.repository=${REGISTRY}/shopnow-frontend" \
+            --set "image.frontend.tag=${IMAGE_TAG}" \
+            --set "database.host=${{ steps.db.outputs.host }}" \
+            --set "database.port=${{ steps.db.outputs.port }}" \
+            --set "database.name=${{ steps.db.outputs.name }}" \
+            --set "database.user=${{ steps.db.outputs.user }}" \
+            -f "$VALS" \
+            --wait --timeout 5m

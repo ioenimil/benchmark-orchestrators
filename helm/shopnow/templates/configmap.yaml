@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shopnow-config
+  namespace: {{ .Release.Namespace }}
+data:
+  # CoreDNS resolves these to the in-cluster ClusterIP Services.
+  BACKEND_HOST: {{ .Values.config.backendHost | quote }}
+  BACKEND_PORT: {{ .Values.config.backendPort | quote }}
+  REDIS_HOST: {{ .Values.config.redisHost | quote }}
+  REDIS_PORT: {{ .Values.config.redisPort | quote }}
+  # DB connection params (non-secret); password is in shopnow-secret.
+  DB_HOST: {{ .Values.database.host | quote }}
+  DB_PORT: {{ .Values.database.port | quote }}
+  DB_NAME: {{ .Values.database.name | quote }}
+  DB_USER: {{ .Values.database.user | quote }}
