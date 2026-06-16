@@ -186,6 +186,20 @@ jobs:
           IMAGE_TAG="sha-${{ github.sha }}"
           REGISTRY="${{ steps.ecr.outputs.registry }}"
 
+          # Recover from a release left in a pending-* state by a previous run
+          # that was killed/cancelled mid-deploy (Helm otherwise refuses with
+          # "another operation in progress"). Roll back to the last good
+          # revision if there is one; if the very first install never completed,
+          # there is nothing to roll back to, so uninstall and let this run
+          # reinstall cleanly.
+          STATUS=$(helm status shopnow -n shopnow -o json 2>/dev/null | jq -r '.info.status' || true)
+          case "$STATUS" in
+            pending-*)
+              echo "Found stuck release in '$STATUS'; clearing before deploy."
+              helm rollback shopnow -n shopnow || helm uninstall shopnow -n shopnow
+              ;;
+          esac
+
           # The DB password is synced into the cluster by the External Secrets
           # Operator (ExternalSecret in the chart); CI only supplies non-secret
           # connection params and the secret's ARN.
