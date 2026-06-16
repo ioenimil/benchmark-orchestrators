@@ -86,3 +86,27 @@ module "eks" {
   db_secret_arn       = module.rds.secret_arn
   tags                = local.tags
 }
+
+# ---------------------------------------------------------------------------
+# EKS access entry for the CI role — grants Kubernetes RBAC access so that
+# Helm can create/update resources during deployments. Placed here (not inside
+# either module) to avoid a circular dependency between github_oidc and eks.
+# ---------------------------------------------------------------------------
+resource "aws_eks_access_entry" "ci" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = module.github_oidc.role_arn
+  type          = "STANDARD"
+  tags          = local.tags
+}
+
+resource "aws_eks_access_policy_association" "ci_admin" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = module.github_oidc.role_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.ci]
+}
