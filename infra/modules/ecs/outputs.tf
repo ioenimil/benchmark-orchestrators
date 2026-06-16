@@ -21,3 +21,22 @@ output "namespace_name" {
   description = "Cloud Map private DNS namespace."
   value       = aws_service_discovery_private_dns_namespace.this.name
 }
+
+output "cluster_arn" {
+  description = "ARN of the ECS cluster."
+  value       = aws_ecs_cluster.this.arn
+}
+
+output "service_arns" {
+  description = "ARNs of the ECS services."
+  value = {
+    frontend = aws_ecs_service.frontend.id
+    backend  = aws_ecs_service.backend.id
+    redis    = aws_ecs_service.redis.id
+  }
+}
+
+output "task_execution_role_arn" {
+  description = "ARN of the ECS task execution IAM role."
+  value       = aws_iam_role.execution.arn
+}

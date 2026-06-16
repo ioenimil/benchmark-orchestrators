@@ -90,3 +90,64 @@ resource "aws_iam_role_policy_attachment" "ecr_push" {
   role       = aws_iam_role.ci.name
   policy_arn = aws_iam_policy.ecr_push.arn
 }
+
+# ---------------------------------------------------------------------------
+# ECS deploy permissions — only created when ecs_service_arns is provided.
+# Scopes UpdateService/Describe to the specific services; RegisterTaskDefinition
+# and DescribeTaskDefinition are account-wide (AWS does not support resource
+# restrictions on those actions). PassRole is scoped to the task execution role.
+# ---------------------------------------------------------------------------
+data "aws_iam_policy_document" "ecs_deploy" {
+  count = length(var.ecs_service_arns) > 0 ? 1 : 0
+
+  statement {
+    sid    = "ECSServiceUpdate"
+    effect = "Allow"
+    actions = [
+      "ecs:UpdateService",
+      "ecs:DescribeServices",
+      "ecs:DescribeTasks",
+      "ecs:ListTasks",
+    ]
+    resources = concat(
+      var.ecs_service_arns,
+      ["arn:aws:ecs:*:*:task/*"],
+    )
+  }
+
+  statement {
+    sid    = "ECSTaskDefinition"
+    effect = "Allow"
+    actions = [
+      "ecs:RegisterTaskDefinition",
+      "ecs:DescribeTaskDefinition",
+      "ecs:ListTaskDefinitions",
+    ]
+    resources = ["*"]
+  }
+
+  dynamic "statement" {
+    for_each = var.ecs_task_execution_role_arn != "" ? [1] : []
+    content {
+      sid       = "PassExecutionRole"
+      effect    = "Allow"
+      actions   = ["iam:PassRole"]
+      resources = [var.ecs_task_execution_role_arn]
+    }
+  }
+}
+
+resource "aws_iam_policy" "ecs_deploy" {
+  count       = length(var.ecs_service_arns) > 0 ? 1 : 0
+  name        = "${var.project}-github-actions-ecs-deploy"
+  description = "ECS deploy access for GitHub Actions CI."
+  policy      = data.aws_iam_policy_document.ecs_deploy[0].json
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_deploy" {
+  count      = length(var.ecs_service_arns) > 0 ? 1 : 0
+  role       = aws_iam_role.ci.name
+  policy_arn = aws_iam_policy.ecs_deploy[0].arn
+}

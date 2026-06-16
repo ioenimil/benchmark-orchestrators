@@ -19,6 +19,18 @@ variable "ecr_repository_arns" {
   type        = list(string)
 }
 
+variable "ecs_service_arns" {
+  description = "ARNs of the ECS services the CI role may update and describe."
+  type        = list(string)
+  default     = []
+}
+
+variable "ecs_task_execution_role_arn" {
+  description = "ARN of the ECS task execution role the CI role must be able to pass to ECS."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Common tags."
   type        = map(string)

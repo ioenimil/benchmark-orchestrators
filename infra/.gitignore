@@ -1,6 +1,5 @@
 # Terraform state, plans, providers, and resolved backend/var files
 .terraform/
-.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 crash.log

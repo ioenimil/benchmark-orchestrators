@@ -22,7 +22,11 @@ module "github_oidc" {
   project             = var.project
   github_repository   = var.github_repository
   ecr_repository_arns = values(module.ecr.repository_arns)
-  tags                = local.tags
+
+  ecs_service_arns            = values(module.ecs.service_arns)
+  ecs_task_execution_role_arn = module.ecs.task_execution_role_arn
+
+  tags = local.tags
 }
 
 module "rds" {
