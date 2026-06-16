@@ -88,6 +88,23 @@ variable "gateway_api_version" {
   default     = "v1.5.0"
 }
 
+variable "db_secret_arn" {
+  description = "ARN of the RDS-managed master credentials secret that the External Secrets Operator may read."
+  type        = string
+}
+
+variable "eso_chart_version" {
+  description = "Helm chart version for external-secrets (External Secrets Operator). Chart 2.x serves the external-secrets.io/v1 API (v1beta1 was removed in ESO v0.17). Verify with `helm search repo external-secrets/external-secrets --versions`."
+  type        = string
+  default     = "2.6.0"
+}
+
+variable "reloader_chart_version" {
+  description = "Helm chart version for stakater/reloader. Verify available versions with `helm search repo stakater/reloader --versions`."
+  type        = string
+  default     = "2.2.12"
+}
+
 variable "tags" {
   description = "Common tags."
   type        = map(string)

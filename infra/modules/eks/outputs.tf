@@ -27,3 +27,13 @@ output "node_security_group_id" {
   description = "Cluster security group attached to nodes."
   value       = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
 }
+
+output "cluster_arn" {
+  description = "ARN of the EKS cluster."
+  value       = aws_eks_cluster.this.arn
+}
+
+output "eso_role_arn" {
+  description = "IRSA role ARN used by the External Secrets Operator to read the RDS secret."
+  value       = aws_iam_role.eso.arn
+}

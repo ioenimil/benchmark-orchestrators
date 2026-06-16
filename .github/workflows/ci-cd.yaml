@@ -12,6 +12,14 @@ name: CI
 #   var     ECS_CLUSTER_NAME  ECS cluster name — from: terraform output ecs_cluster_name
 #   var     EKS_CLUSTER_NAME  EKS cluster name — from: terraform output eks_cluster_name
 #   var     DB_SECRET_ARN     RDS Secrets Manager ARN — from: terraform output db_secret_arn
+#   var     DB_HOST           RDS endpoint host — from: terraform output rds_endpoint
+#   var     DB_NAME           Database name (e.g. orchestrator)
+#   var     DB_USER           Database master username (e.g. shopnow)
+#   var     DB_PORT           DB port (optional, defaults to 5432)
+#
+# The DB password is NOT read by this pipeline — the External Secrets Operator
+# syncs it from Secrets Manager into the cluster (see helm/shopnow). CI only
+# passes the non-secret connection params and the secret's ARN.
 #
 # ECR repositories (created by infra/ Terraform): shopnow-backend, shopnow-frontend.
 
@@ -173,43 +181,24 @@ jobs:
             --name "${{ vars.EKS_CLUSTER_NAME }}" \
             --region "${{ vars.AWS_REGION || 'eu-west-1' }}"
 
-      - name: Fetch DB credentials from Secrets Manager
-        id: db
-        run: |
-          SECRET=$(aws secretsmanager get-secret-value \
-            --secret-id "${{ vars.DB_SECRET_ARN }}" \
-            --query SecretString --output text)
-          DB_PASSWORD=$(echo "$SECRET" | jq -r .password)
-          echo "::add-mask::$DB_PASSWORD"
-          {
-            echo "host=$(echo "$SECRET" | jq -r .host)"
-            echo "port=$(echo "$SECRET" | jq -r .port)"
-            echo "name=$(echo "$SECRET" | jq -r .dbname)"
-            echo "user=$(echo "$SECRET" | jq -r .username)"
-            echo "password=$DB_PASSWORD"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Deploy via Helm
-        env:
-          DB_PASSWORD: ${{ steps.db.outputs.password }}
         run: |
           IMAGE_TAG="sha-${{ github.sha }}"
           REGISTRY="${{ steps.ecr.outputs.registry }}"
 
-          # Write the password to a temp values file to keep it off the command line.
-          VALS=$(mktemp)
-          printf 'database:\n  password: "%s"\n' "$DB_PASSWORD" > "$VALS"
-          trap 'rm -f "$VALS"' EXIT
-
+          # The DB password is synced into the cluster by the External Secrets
+          # Operator (ExternalSecret in the chart); CI only supplies non-secret
+          # connection params and the secret's ARN.
           helm upgrade --install shopnow ./helm/shopnow \
             --namespace shopnow --create-namespace \
             --set "image.backend.repository=${REGISTRY}/shopnow-backend" \
             --set "image.backend.tag=${IMAGE_TAG}" \
             --set "image.frontend.repository=${REGISTRY}/shopnow-frontend" \
             --set "image.frontend.tag=${IMAGE_TAG}" \
-            --set "database.host=${{ steps.db.outputs.host }}" \
-            --set "database.port=${{ steps.db.outputs.port }}" \
-            --set "database.name=${{ steps.db.outputs.name }}" \
-            --set "database.user=${{ steps.db.outputs.user }}" \
-            -f "$VALS" \
+            --set "database.host=${{ vars.DB_HOST }}" \
+            --set "database.port=${{ vars.DB_PORT || '5432' }}" \
+            --set "database.name=${{ vars.DB_NAME }}" \
+            --set "database.user=${{ vars.DB_USER }}" \
+            --set "externalSecrets.region=${{ vars.AWS_REGION || 'eu-west-1' }}" \
+            --set "externalSecrets.dbSecretArn=${{ vars.DB_SECRET_ARN }}" \
             --wait --timeout 5m

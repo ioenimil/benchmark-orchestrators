@@ -31,6 +31,12 @@ variable "ecs_task_execution_role_arn" {
   default     = ""
 }
 
+variable "eks_cluster_arn" {
+  description = "ARN of the EKS cluster the CI role may describe (needed for aws eks update-kubeconfig and helm deployments)."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Common tags."
   type        = map(string)

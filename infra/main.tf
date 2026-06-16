@@ -26,6 +26,8 @@ module "github_oidc" {
   ecs_service_arns            = values(module.ecs.service_arns)
   ecs_task_execution_role_arn = module.ecs.task_execution_role_arn
 
+  eks_cluster_arn = module.eks.cluster_arn
+
   tags = local.tags
 }
 
@@ -81,5 +83,6 @@ module "eks" {
   node_instance_type  = var.node_instance_type
   lbc_chart_version   = var.lbc_chart_version
   gateway_api_version = var.gateway_api_version
+  db_secret_arn       = module.rds.secret_arn
   tags                = local.tags
 }

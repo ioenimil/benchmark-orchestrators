@@ -5,6 +5,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     app: backend
+  annotations:
+    # Reloader restarts this Deployment when shopnow-secret or shopnow-config
+    # change, so ESO-driven DB password rotations propagate without a redeploy.
+    reloader.stakater.com/auto: "true"
 spec:
   replicas: {{ .Values.backend.replicas }}
   selector:

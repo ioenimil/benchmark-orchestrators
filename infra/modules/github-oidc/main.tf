@@ -151,3 +151,37 @@ resource "aws_iam_role_policy_attachment" "ecs_deploy" {
   role       = aws_iam_role.ci.name
   policy_arn = aws_iam_policy.ecs_deploy[0].arn
 }
+
+# ---------------------------------------------------------------------------
+# EKS deploy permissions — only created when eks_cluster_arn is provided.
+# DescribeCluster is required by `aws eks update-kubeconfig` and by the Helm
+# provider. Scoped to the single cluster ARN; no account-wide wildcards needed.
+# ---------------------------------------------------------------------------
+data "aws_iam_policy_document" "eks_deploy" {
+  count = var.eks_cluster_arn != "" ? 1 : 0
+
+  statement {
+    sid    = "EKSDescribeCluster"
+    effect = "Allow"
+    actions = [
+      "eks:DescribeCluster",
+      "eks:ListClusters",
+    ]
+    resources = [var.eks_cluster_arn]
+  }
+}
+
+resource "aws_iam_policy" "eks_deploy" {
+  count       = var.eks_cluster_arn != "" ? 1 : 0
+  name        = "${var.project}-github-actions-eks-deploy"
+  description = "EKS describe access for GitHub Actions CI (update-kubeconfig + Helm)."
+  policy      = data.aws_iam_policy_document.eks_deploy[0].json
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "eks_deploy" {
+  count      = var.eks_cluster_arn != "" ? 1 : 0
+  role       = aws_iam_role.ci.name
+  policy_arn = aws_iam_policy.eks_deploy[0].arn
+}

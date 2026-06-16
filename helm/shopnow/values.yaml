@@ -26,12 +26,20 @@ config:
   redisHost: redis
   redisPort: "6379"
 
+# Non-secret DB connection params (set via pipeline). The RDS-managed secret
+# only holds username/password, so host/port/name/user come from config, not ESO.
 database:
-  host: ""     # RDS endpoint — set via pipeline from terraform output db_secret_arn
+  host: ""     # RDS endpoint — set via pipeline from terraform output rds_endpoint
   port: "5432"
   name: ""     # e.g. orchestrator
   user: ""     # e.g. shopnow
-  password: "" # injected from Secrets Manager by the pipeline; never committed
+
+# The DB password is synced from AWS Secrets Manager by the External Secrets
+# Operator into shopnow-secret — never passed through the pipeline.
+externalSecrets:
+  region: ""        # AWS region of the secret, set via pipeline (e.g. eu-west-1)
+  dbSecretArn: ""   # ARN of the RDS-managed master secret (terraform output db_secret_arn)
+  refreshInterval: 1h  # how often ESO re-reads the secret (picks up rotation)
 
 gateway:
   className: shopnow-alb
