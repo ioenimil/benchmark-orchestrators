@@ -282,12 +282,19 @@ resource "helm_release" "lbc" {
     value = aws_iam_role.lbc.arn
   }
 
-  # Enable Gateway API reconciliation (chart >= 1.14 / controller >= 2.14).
-  # Verify the exact key with `helm show values eks-charts/aws-load-balancer-controller`.
-  set {
-    name  = "enableGatewayAPI"
-    value = "true"
-  }
+  # Enable ALB Gateway API reconciliation via a values block (not set{}) so the
+  # nested map is correctly typed for the convertMapToCsv helper in the chart template,
+  # which generates --feature-gates=ALBGatewayAPI=true on the controller binary.
+  values = [
+    yamlencode({
+      defaultTargetType = "ip"
+      controllerConfig = {
+        featureGates = {
+          ALBGatewayAPI = true
+        }
+      }
+    })
+  ]
 
   depends_on = [
     aws_eks_node_group.this,
