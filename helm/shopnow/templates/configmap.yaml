@@ -5,7 +5,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
 data:
   # CoreDNS resolves these to the in-cluster ClusterIP Services.
-  BACKEND_HOST: {{ .Values.config.backendHost | quote }}
+  # BACKEND_HOST must be a fully-qualified Service name: the frontend nginx
+  # proxies to it via the `resolver` directive, which (unlike libc) does NOT
+  # apply /etc/resolv.conf search domains, so a bare "backend" would NXDOMAIN.
+  BACKEND_HOST: "{{ .Values.config.backendHost }}.{{ .Release.Namespace }}.svc.cluster.local"
   BACKEND_PORT: {{ .Values.config.backendPort | quote }}
   REDIS_HOST: {{ .Values.config.redisHost | quote }}
   REDIS_PORT: {{ .Values.config.redisPort | quote }}
