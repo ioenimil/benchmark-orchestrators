@@ -8,8 +8,14 @@ server {
   resolver 169.254.169.253 valid=10s ipv6=off;
 
   location /api/ {
-    set $backend http://${BACKEND_HOST}:${BACKEND_PORT};
-    proxy_pass $backend/;
+    # The hostname must reach proxy_pass through a variable so nginx uses the
+    # resolver above at request time instead of caching the IP at startup.
+    set $backend ${BACKEND_HOST}:${BACKEND_PORT};
+    # With a variable in proxy_pass, nginx does NOT strip the location prefix,
+    # so strip /api/ ourselves and pass proxy_pass WITHOUT a URI part (a URI on
+    # a variable proxy_pass would replace the request path entirely → GET /).
+    rewrite ^/api/(.*)$ /$1 break;
+    proxy_pass http://$backend;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
   }
