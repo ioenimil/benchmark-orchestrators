@@ -88,6 +88,22 @@ module "eks" {
 }
 
 # ---------------------------------------------------------------------------
+# RDS ingress from EKS nodes — allows backend pods running in EKS to reach
+# RDS on port 5432. The networking module only wires the ECS backend SG to
+# RDS; EKS pods use the cluster security group, which is different, so this
+# rule must be added separately to avoid a circular dependency between the
+# networking and eks modules.
+# ---------------------------------------------------------------------------
+resource "aws_vpc_security_group_ingress_rule" "rds_from_eks_nodes" {
+  security_group_id            = module.networking.rds_sg_id
+  description                  = "Postgres from EKS nodes (backend pods)"
+  referenced_security_group_id = module.eks.node_security_group_id
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+}
+
+# ---------------------------------------------------------------------------
 # EKS access entry for the CI role — grants Kubernetes RBAC access so that
 # Helm can create/update resources during deployments. Placed here (not inside
 # either module) to avoid a circular dependency between github_oidc and eks.

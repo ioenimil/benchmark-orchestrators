@@ -244,3 +244,10 @@ jobs:
           echo ""
           echo "=== Recent events in shopnow namespace ==="
           kubectl get events -n shopnow --sort-by='.lastTimestamp' | tail -30
+
+          echo ""
+          echo "=== Backend pod logs (last 100 lines, all backend pods) ==="
+          kubectl get pods -n shopnow -l app=backend -o name | while read pod; do
+            echo "--- $pod ---"
+            kubectl logs -n shopnow "$pod" --tail=100 2>&1 || kubectl logs -n shopnow "$pod" --previous --tail=100 2>&1 || echo "(no logs available)"
+          done
