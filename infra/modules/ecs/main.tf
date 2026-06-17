@@ -159,6 +159,10 @@ resource "aws_ecs_task_definition" "frontend" {
       environment = [
         { name = "BACKEND_HOST", value = var.backend_host },
         { name = "BACKEND_PORT", value = tostring(var.backend_port) },
+        # Tells the nginx entrypoint to export NGINX_LOCAL_RESOLVERS from the
+        # task's /etc/resolv.conf (the VPC resolver), which the config template
+        # uses in its `resolver` directive to re-resolve Cloud Map at runtime.
+        { name = "NGINX_ENTRYPOINT_LOCAL_RESOLVERS", value = "1" },
       ]
       logConfiguration = {
         logDriver = "awslogs"

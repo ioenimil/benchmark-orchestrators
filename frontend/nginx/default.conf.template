@@ -3,12 +3,13 @@ server {
   root /usr/share/nginx/html;
   index index.html;
 
-  # Use the container's own /etc/resolv.conf nameservers (local=on) so the
-  # right resolver is used on each platform automatically: kube-dns inside an
-  # EKS pod (resolves the "backend" Service), and the VPC resolver in ECS
-  # Fargate (resolves "backend.shopnow.local"). valid=10s re-resolves on a
-  # short TTL so Cloud Map task-IP changes don't get cached at startup.
-  resolver local=on valid=10s ipv6=off;
+  # ${NGINX_LOCAL_RESOLVERS} is exported by the image's 15-local-resolvers.envsh
+  # entrypoint from the container's /etc/resolv.conf, so the right resolver is
+  # used on each platform automatically: kube-dns inside an EKS pod (resolves
+  # the "backend" Service) and the VPC resolver in ECS Fargate (resolves
+  # "backend.shopnow.local"). valid=10s re-resolves on a short TTL so Cloud Map
+  # task-IP changes don't get cached at startup.
+  resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
 
   location /api/ {
     # The hostname must reach proxy_pass through a variable so nginx uses the

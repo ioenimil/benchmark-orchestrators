@@ -20,6 +20,12 @@ spec:
           image: "{{ .Values.image.frontend.repository }}:{{ .Values.image.frontend.tag }}"
           ports:
             - containerPort: 80
+          env:
+            # Tells the nginx entrypoint to export NGINX_LOCAL_RESOLVERS from the
+            # pod's /etc/resolv.conf (kube-dns), which the config template uses in
+            # its `resolver` directive to resolve the in-cluster backend Service.
+            - name: NGINX_ENTRYPOINT_LOCAL_RESOLVERS
+              value: "1"
           envFrom:
             - configMapRef:
                 name: shopnow-config
