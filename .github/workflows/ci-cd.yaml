@@ -216,3 +216,31 @@ jobs:
             --set "externalSecrets.region=${{ vars.AWS_REGION || 'eu-west-1' }}" \
             --set "externalSecrets.dbSecretArn=${{ vars.DB_SECRET_ARN }}" \
             --wait --timeout 5m
+
+      - name: Diagnose failure
+        if: failure()
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n shopnow -o wide
+
+          echo ""
+          echo "=== Pod events (describe) ==="
+          kubectl describe pods -n shopnow
+
+          echo ""
+          echo "=== ExternalSecret / SecretStore sync status ==="
+          kubectl get externalsecret,secretstore -n shopnow -o wide 2>/dev/null || echo "No ExternalSecret resources found"
+
+          echo ""
+          echo "=== shopnow-secret exists? ==="
+          kubectl get secret shopnow-secret -n shopnow 2>/dev/null \
+            && echo "Secret exists" \
+            || echo "Secret NOT found — ESO has not synced it yet"
+
+          echo ""
+          echo "=== ESO controller pods ==="
+          kubectl get pods -n external-secrets -o wide 2>/dev/null || echo "external-secrets namespace not found"
+
+          echo ""
+          echo "=== Recent events in shopnow namespace ==="
+          kubectl get events -n shopnow --sort-by='.lastTimestamp' | tail -30
